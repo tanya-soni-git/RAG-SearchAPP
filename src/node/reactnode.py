@@ -53,23 +53,23 @@ class RAGNodes:
         return [retriever_tool, wikipedia_tool]
 
     def _build_agent(self):
-    # Ensure tools are passed as a structured list
-    tools = [self.retriever_tool, self.wikipedia_tool]
+        # Ensure tools are passed as a structured list
+        tools = [self.retriever_tool, self.wikipedia_tool]
 
-    # Explicit instructions to prevent malformed XML/JSON tool calls
-    system_message = (
-        "You are a helpful assistant. Use the provided tools to answer questions. "
-        "When calling a tool, you MUST provide valid JSON arguments. "
-        "Do not add extra XML tags or spaces outside the JSON block."
-    )
+        # Explicit instructions to prevent malformed XML/JSON tool calls
+        system_message = (
+            "You are a helpful assistant. Use the provided tools to answer questions. "
+            "When calling a tool, you MUST provide valid JSON arguments. "
+            "Do not add extra XML tags or spaces outside the JSON block."
+        )
 
-    # Using state_modifier to enforce formatting
-    self._agent = create_react_agent(
-        self.llm, 
-        tools=tools,
-        state_modifier=system_message
-    )
-    
+        # Using state_modifier to enforce formatting
+        self._agent = create_react_agent(
+            self.llm, 
+            tools=tools,
+            state_modifier=system_message
+        )
+        
     def generate_answer(self, state: RAGState) -> RAGState:
         if self._agent is None:
             self._build_agent()
