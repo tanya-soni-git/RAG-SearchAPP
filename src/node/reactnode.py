@@ -1,8 +1,10 @@
 from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
-from langchain.tools.retriever import create_retriever_tool
-from langgraph.prebuilt import create_react_agent
+from langchain_core.tools import create_retriever_tool
 from langchain_core.messages import HumanMessage
+
+from langgraph.prebuilt import create_tool_calling_executor
+
 from src.state.rag_state import RAGState
 
 
@@ -13,7 +15,6 @@ class RAGNodes:
         self._agent = None
 
     def _build_agent(self):
-        # --- Create tools safely here ---
         retriever_tool = create_retriever_tool(
             self.retriever,
             name="document_search",
@@ -26,18 +27,9 @@ class RAGNodes:
 
         tools = [retriever_tool, wikipedia_tool]
 
-        system_message = (
-            "You are a helpful RAG assistant.\n"
-            "Use the document_search tool for internal documents.\n"
-            "Use the wikipedia tool only if documents do not contain the answer.\n"
-            "Always return a clear and concise answer.\n"
-            "Tool calls must use valid JSON only."
-        )
-
-        self._agent = create_react_agent(
-            llm=self.llm,
-            tools=tools,
-            state_modifier=system_message
+        self._agent = create_tool_calling_executor(
+            self.llm,
+            tools
         )
 
     def generate_answer(self, state: RAGState) -> RAGState:
@@ -59,4 +51,3 @@ class RAGNodes:
             **state,
             "answer": answer
         }
-
