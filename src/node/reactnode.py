@@ -1,85 +1,47 @@
-"""LangGraph nodes for RAG workflow + ReAct Agent with explicit Groq tool support"""
-
-import uuid
-import sys
-import builtins
-
-# MANDATORY FIX FOR PYTHON 3.14 + LANGGRAPH TYPING BUG
-builtins.uuid = uuid 
-
-from typing import List, Optional
-from src.state.rag_state import RAGState
-
-from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage
-from langchain_core.tools import tool # Using the structured tool decorator
-from langgraph.prebuilt import create_react_agent
-
-# Wikipedia tool
+import streamlit as st
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.tools import WikipediaQueryRun
 from langchain_community.utilities import WikipediaAPIWrapper
+from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import HumanMessage
 
 class RAGNodes:
     def __init__(self, retriever, llm):
-        self.retriever = retriever
         self.llm = llm
+        self.retriever = retriever
         self._agent = None
-
-    def retrieve_docs(self, state: RAGState) -> RAGState:
-        docs = self.retriever.invoke(state.question)
-        return RAGState(
-            question=state.question,
-            retrieved_docs=docs
-        )
-
-    def _get_agent_tools(self):
-        """Define tools using the @tool decorator for strict schema support"""
         
-        @tool
-        def retriever_tool(query: str) -> str:
-            """Fetch relevant passages from the internal technical documentation. 
-            Argument 'query' must be a search string."""
-            docs = self.retriever.invoke(query)
-            if not docs:
-                return "No documents found."
-            return "\n\n".join([f"Source: {d.metadata.get('source', 'unknown')}\nContent: {d.page_content}" for d in docs[:5]])
-
-        @tool
-        def wikipedia_tool(search_query: str) -> str:
-            """Search Wikipedia for general knowledge and high-level summaries. 
-            Argument 'search_query' must be a specific search term."""
-            wiki = WikipediaAPIWrapper(top_k_results=3, lang="en")
-            return wiki.run(search_query)
-
-        return [retriever_tool, wikipedia_tool]
+        # DEFINING THE MISSING ATTRIBUTES HERE
+        # This creates the tools the agent will use
+        from langchain.tools.retriever import create_retriever_tool
+        
+        self.retriever_tool = create_retriever_tool(
+            retriever,
+            "retriever_tool",
+            "Search for information about specific internal documents."
+        )
+        
+        self.wikipedia_tool = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
 
     def _build_agent(self):
-        # Ensure tools are passed as a structured list
+        # Now these attributes exist because we defined them in __init__
         tools = [self.retriever_tool, self.wikipedia_tool]
-
-        # Explicit instructions to prevent malformed XML/JSON tool calls
+        
         system_message = (
             "You are a helpful assistant. Use the provided tools to answer questions. "
-            "When calling a tool, you MUST provide valid JSON arguments. "
-            "Do not add extra XML tags or spaces outside the JSON block."
+            "When calling a tool, you MUST provide valid JSON arguments."
         )
-
-        # Using state_modifier to enforce formatting
+        
         self._agent = create_react_agent(
             self.llm, 
             tools=tools,
             state_modifier=system_message
         )
-        
-    def generate_answer(self, state: RAGState) -> RAGState:
+
+    def generate_answer(self, state):
         if self._agent is None:
             self._build_agent()
-
-        result = self._agent.invoke({"messages": [HumanMessage(content=state.question)]})
-        messages = result.get("messages", [])
-        answer = messages[-1].content if messages else "Could not generate answer."
-
-        return RAGState(
-            question=state.question,
-            retrieved_docs=state.retrieved_docs,
-            answer=answer
-        )
+        
+        # Rest of your generate_answer code...
+        result = self._agent.invoke({"messages": [HumanMessage(content=state["question"])]})
+        return {"answer": result["messages"][-1].content, "retrieved_docs": []}
